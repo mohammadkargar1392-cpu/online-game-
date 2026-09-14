@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,user-scalable=no">
+
+<title>نبرد آنلاین دو نفره</title>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<style>
+*{
+    box-sizing:border-box;
+    user-select:none;
+    -webkit-user-select:none;
+}
+
+body{
+    margin:0;
+    overflow:hidden;
+    background:#080b12;
+    font-family:Arial,sans-serif;
+    color:white;
+}
+
+#menu{
+    position:fixed;
+    inset:0;
+    z-index:20;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:14px;
+    background:
+        radial-gradient(circle at center,#17243b,#05070b 70%);
+    text-align:center;
+}
+
+#menu h1{
+    font-size:36px;
+    margin:0 0 8px;
+    text-shadow:0 0 20px #00d9ff;
+}
+
+#menu p{
+    color:#aaa;
+    margin:0 0 15px;
+}
+
+button,input{
+    font-family:Arial;
+}
+
+button{
+    border:0;
+    border-radius:14px;
+    padding:14px 25px;
+    color:white;
+    font-size:18px;
+    font-weight:bold;
+    background:#087cff;
+    box-shadow:0 5px 20px #0066ff55;
+}
+
+button:active{
+    transform:scale(.95);
+}
+
+input{
+    width:230px;
+    padding:14px;
+    border:0;
+    border-radius:12px;
+    text-align:center;
+    font-size:18px;
+    outline:none;
+}
+
+#roomCode{
+    display:none;
+    padding:12px 20px;
+    border-radius:12px;
+    background:#172033;
+    color:#00eaff;
+    font-size:22px;
+    font-weight:bold;
+}
+
+#message{
+    min-height:25px;
+    color:#ddd;
+}
+
+#game{
+    display:none;
+    width:100vw;
+    height:100vh;
+}
+
+canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+    background:
+        linear-gradient(#17283a,#070b10);
+}
+
+#top{
+    position:fixed;
+    top:12px;
+    left:10px;
+    right:10px;
+    z-index:5;
+    display:flex;
+    justify-content:space-between;
+    font-size:18px;
+    font-weight:bold;
+    pointer-events:none;
+}
+
+.hp{
+    width:120px;
+    height:13px;
+    margin-top:5px;
+    background:#333;
+    border-radius:10px;
+    overflow:hidden;
+}
+
+.bar{
+    height:100%;
+    width:100%;
+    background:#21e65b;
+}
+
+#status{
+    position:fixed;
+    top:65px;
+    left:0;
+    right:0;
+    text-align:center;
+    z-index:5;
+    font-weight:bold;
+}
+
+.control{
+    position:fixed;
+    z-index:10;
+}
+
+#up{
+    left:92px;
+    bottom:145px;
+}
+
+#left{
+    left:25px;
+    bottom:85px;
+}
+
+#down{
+    left:92px;
+    bottom:25px;
+}
+
+#right{
+    left:159px;
+    bottom:85px;
+}
+
+.move{
+    width:58px;
+    height:58px;
+    padding:0;
+    border-radius:15px;
+    background:#ffffff22;
+    border:2px solid #ffffff44;
+    box-shadow:none;
+    font-size:25px;
+}
+
+#attack{
+    right:25px;
+    bottom:40px;
+    width:105px;
+    height:105px;
+    border-radius:50%;
+    background:#e62e45;
+    border:4px solid #ffffffaa;
+    font-size:19px;
+}
+
+#restart{
+    display:none;
+    position:fixed;
+    z-index:30;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+
+    <h1>⚔️ نبرد آنلاین</h1>
+
+    <p>دو نفر با دو گوشی به هم وصل شوید!</p>
+
+    <button id="create">
+        🎮 ساخت اتاق
+    </button>
+
+    <div id="roomCode"></div>
+
+    <input
+        id="code"
+        placeholder="کد دوستت">
+
+    <button id="join">
+        🔗 اتصال به اتاق
+    </button>
+
+    <div id="message">
+        آماده اتصال...
+    </div>
+
+</div>
+
+
+<div id="game">
+
+    <canvas id="canvas"></canvas>
+
+    <div id="top">
+
+        <div>
+            👤 تو
+            <div class="hp">
+                <div id="myHp" class="bar"></div>
+            </div>
+        </div>
+
+        <div>
+            👤 حریف
+            <div class="hp">
+                <div id="enemyHp" class="bar"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="status">
+        منتظر بازیکن دوم...
+    </div>
+
+    <button id="up" class="control move">▲</button>
+    <button id="left" class="control move">◀</button>
+    <button id="down" class="control move">▼</button>
+    <button id="right" class="control move">▶</button>
+
+    <button id="attack" class="control">
+        👊 ضربه
+    </button>
+
+</div>
+
+<button id="restart">🔄 بازی دوباره</button>
+
+
+<script>
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let W = 0;
+let H = 0;
+
+function resize(){
+
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+
+}
+
+resize();
+
+window.addEventListener("resize",resize);
+
+
+// -------------------------
+// اتصال PeerJS
+// -------------------------
+
+let peer = null;
+let connection = null;
+let isHost = false;
+let connected = false;
+
+const message = document.getElementById("message");
+
+const my = {
+    x: 130,
+    y: 300,
+    hp: 100
+};
+
+const enemy = {
+    x: 500,
+    y: 300,
+    hp: 100
+};
+
+
+// -------------------------
+// ساخت اتاق
+// -------------------------
+
+document.getElementById("create").onclick = function(){
+
+    message.innerText = "در حال ساخت اتاق...";
+
+    isHost = true;
+
+    const randomCode =
+        "fight-" +
+        Math.random()
+        .toString(36)
+        .substring(2,8)
+        .toUpperCase();
+
+    peer = new Peer(randomCode);
+
+    peer.on("open",id=>{
+
+        document.getElementById("roomCode").style.display="block";
+
+        document.getElementById("roomCode").innerText =
+            "کد اتاق: " + id.replace("fight-","");
+
+        message.innerText =
+            "کد را برای دوستت بفرست.";
+
+    });
+
+    peer.on("connection",conn=>{
+
+        connection = conn;
+
+        setupConnection();
+
+    });
+
+    peer.on("error",err=>{
+
+        message.innerText =
+            "خطا در اتصال. دوباره امتحان کن.";
+
+        console.log(err);
+
+    });
+
+};
+
+
+// -------------------------
+// ورود به اتاق
+// -------------------------
+
+document.getElementById("join").onclick = function(){
+
+    const code =
+        document.getElementById("code")
+        .value
+        .trim()
+        .toUpperCase();
+
+    if(!code){
+
+        message.innerText =
+            "اول کد اتاق را وارد کن.";
+
+        return;
+    }
+
+    message.innerText =
+        "در حال اتصال...";
+
+    isHost = false;
+
+    peer = new Peer();
+
+    peer.on("open",()=>{
+
+        connection =
+            peer.connect("fight-"+code);
+
+        setupConnection();
+
+    });
+
+    peer.on("error",err=>{
+
+        message.innerText =
+            "اتاق پیدا نشد یا اتصال ناموفق بود.";
+
+        console.log(err);
+
+    });
+
+};
+
+
+// -------------------------
+// تنظیم اتصال
+// -------------------------
+
+function setupConnection(){
+
+    connection.on("open",()=>{
+
+        connected = true;
+
+        document.getElementById("menu")
+            .style.display="none";
+
+        document.getElementById("game")
+            .style.display="block";
+
+        document.getElementById("status")
+            .innerText="🔥 حریف وصل شد!";
+
+        startGame();
+
+    });
+
+    connection.on("data",data=>{
+
+        receiveData(data);
+
+    });
+
+    connection.on("close",()=>{
+
+        connected=false;
+
+        document.getElementById("status")
+            .innerText="❌ اتصال قطع شد.";
+
+    });
+
+}
+
+
+// -------------------------
+// ارسال اطلاعات
+// -------------------------
+
+function send(data){
+
+    if(
+        connection &&
+        connection.open
+    ){
+
+        connection.send(data);
+
+    }
+
+}
+
+
+// -------------------------
+// دریافت اطلاعات
+// -------------------------
+
+function receiveData(data){
+
+    if(data.type==="state"){
+
+        enemy.x=data.x;
+        enemy.y=data.y;
+        enemy.hp=data.hp;
+
+        updateBars();
+
+    }
+
+    if(data.type==="attack"){
+
+        checkHit();
+
+    }
+
+    if(data.type==="gameover"){
+
+        endGame(false);
+
+    }
+
+}
+
+
+// -------------------------
+// حرکت
+// -------------------------
+
+function move(dx,dy){
+
+    if(!connected)return;
+
+    my.x += dx;
+    my.y += dy;
+
+    my.x =
+        Math.max(
+            35,
+            Math.min(W-35,my.x)
+        );
+
+    my.y =
+        Math.max(
+            100,
+            Math.min(H-70,my.y)
+        );
+
+    send({
+        type:"state",
+        x:my.x,
+        y:my.y,
+        hp:my.hp
+    });
+
+    draw();
+
+}
+
+
+// -------------------------
+// حمله
+// -------------------------
+
+function attack(){
+
+    if(!connected)return;
+
+    send({
+        type:"attack"
+    });
+
+    // افکت کوچک
+    for(let i=0;i<8;i++){
+
+        particles.push({
+            x:my.x,
+            y:my.y,
+            vx:(Math.random()-.5)*6,
+            vy:(Math.random()-.5)*6,
+            life:20
+        });
+
+    }
+
+}
+
+
+// -------------------------
+// بررسی برخورد
+// -------------------------
+
+function checkHit(){
+
+    const dx =
+        my.x-enemy.x;
+
+    const dy =
+        my.y-enemy.y;
+
+    const distance =
+        Math.sqrt(dx*dx+dy*dy);
+
+    if(distance<100){
+
+        my.hp -= 10;
+
+        if(my.hp<0)
+            my.hp=0;
+
+        updateBars();
+
+        if(my.hp<=0){
+
+            send({
+                type:"gameover"
+            });
+
+            endGame(false);
+
+        }
+
+    }
+
+}
+
+
+// -------------------------
+// نوار سلامتی
+// -------------------------
+
+function updateBars(){
+
+    document.getElementById("myHp")
+        .style.width =
+        my.hp+"%";
+
+    document.getElementById("enemyHp")
+        .style.width =
+        enemy.hp+"%";
+
+}
+
+
+// -------------------------
+// افکت
+// -------------------------
+
+let particles=[];
+
+function updateParticles(){
+
+    for(
+        let i=particles.length-1;
+        i>=0;
+        i--
+    ){
+
+        const p=particles[i];
+
+        p.x+=p.vx;
+        p.y+=p.vy;
+        p.life--;
+
+        if(p.life<=0)
+            particles.splice(i,1);
+
+    }
+
+}
+
+
+// -------------------------
+// رسم بازی
+// -------------------------
+
+function draw(){
+
+    ctx.clearRect(
+        0,0,W,H
+    );
+
+    // زمین
+    ctx.fillStyle="#0b121a";
+    ctx.fillRect(
+        0,0,W,H
+    );
+
+    // خطوط
+    ctx.strokeStyle="#ffffff0d";
+    ctx.lineWidth=1;
+
+    for(
+        let x=0;
+        x<W;
+        x+=50
+    ){
+
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,H);
+        ctx.stroke();
+
+    }
+
+    for(
+        let y=80;
+        y<H;
+        y+=50
+    ){
+
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(W,y);
+        ctx.stroke();
+
+    }
+
+
+    // حریف
+    drawPlayer(
+        enemy,
+        "#ff304f",
+        "حریف"
+    );
+
+
+    // بازیکن
+    drawPlayer(
+        my,
+        "#00d9ff",
+        "تو"
+    );
+
+
+    // ذرات
+    for(const p of particles){
+
+        ctx.globalAlpha =
+            p.life/20;
+
+        ctx.fillStyle="#ffd000";
+
+        ctx.fillRect(
+            p.x,
+            p.y,
+            6,
+            6
+        );
+
+    }
+
+    ctx.globalAlpha=1;
+
+}
+
+
+function drawPlayer(p,color,name){
+
+    ctx.save();
+
+    ctx.shadowBlur=25;
+    ctx.shadowColor=color;
+
+    ctx.fillStyle=color;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        p.x,
+        p.y,
+        30,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+
+    // چشم‌ها
+    ctx.fillStyle="#111";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        p.x-9,
+        p.y-6,
+        5,
+        0,
+        Math.PI*2
+    );
+
+    ctx.arc(
+        p.x+9,
+        p.y-6,
+        5,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle="white";
+
+    ctx.font="bold 15px Arial";
+
+    ctx.textAlign="center";
+
+    ctx.fillText(
+        name,
+        p.x,
+        p.y-45
+    );
+
+    ctx.restore();
+
+}
+
+
+// -------------------------
+// پایان بازی
+// -------------------------
+
+function endGame(won){
+
+    document.getElementById("status")
+        .innerText =
+        won
+        ? "🏆 تو برنده شدی!"
+        : "💥 بازی را باختی!";
+
+    document.getElementById("restart")
+        .style.display="block";
+
+}
+
+
+// -------------------------
+// شروع
+// -------------------------
+
+function startGame(){
+
+    my.x =
+        isHost
+        ? 120
+        : W-120;
+
+    my.y =
+        H/2;
+
+    enemy.x =
+        isHost
+        ? W-120
+        : 120;
+
+    enemy.y =
+        H/2;
+
+    my.hp=100;
+    enemy.hp=100;
+
+    updateBars();
+    draw();
+
+}
+
+
+// -------------------------
+// دکمه‌های حرکت
+// -------------------------
+
+function button(id,dx,dy){
+
+    const el =
+        document.getElementById(id);
+
+    el.addEventListener(
+        "touchstart",
+        e=>{
+            e.preventDefault();
+            move(dx,dy);
+        },
+        {passive:false}
+    );
+
+    el.addEventListener(
+        "mousedown",
+        ()=>{
+            move(dx,dy);
+        }
+    );
+
+}
+
+button("up",0,-25);
+button("down",0,25);
+button("left",-25,0);
+button("right",25,0);
+
+
+// -------------------------
+// دکمه ضربه
+// -------------------------
+
+document.getElementById("attack")
+.addEventListener(
+    "touchstart",
+    e=>{
+        e.preventDefault();
+        attack();
+    },
+    {passive:false}
+);
+
+document.getElementById("attack")
+.addEventListener(
+    "mousedown",
+    attack
+);
+
+
+// -------------------------
+// دوباره
+// -------------------------
+
+document.getElementById("restart")
+.onclick=()=>{
+
+    location.reload();
+
+};
+
+
+// -------------------------
+// حلقه بازی
+// -------------------------
+
+function loop(){
+
+    updateParticles();
+
+    draw();
+
+    requestAnimationFrame(loop);
+
+}
+
+loop();
+
+</script>
+
+</body>
+</html>
